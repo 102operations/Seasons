@@ -1,0 +1,248 @@
+// ============================================
+// PRISMA SCHEMA - Premium COD E-commerce
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS / ADMINS
+// ============================================
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ============================================
+// CATEGORIES
+// ============================================
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  image       String?
+  featured    Boolean   @default(false)
+  order       Int       @default(0)
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("categories")
+}
+
+// ============================================
+// PRODUCTS
+// ============================================
+model Product {
+  id            String         @id @default(cuid())
+  name          String
+  slug          String         @unique
+  description   String         @db.Text
+  shortDesc     String?
+  price         Float
+  comparePrice  Float?         // For showing discount (original price)
+  cost          Float?         // Cost for the owner (private)
+  sku           String?        @unique
+  stock         Int            @default(0)
+  inStock       Boolean        @default(true)
+  featured      Boolean        @default(false)
+  isActive      Boolean        @default(true)
+  images        String[]       // Cloudinary URLs
+  thumbnail     String?
+  tags          String[]
+  rating        Float          @default(0)
+  reviewCount   Int            @default(0)
+  viewCount     Int            @default(0)
+  soldCount     Int            @default(0)
+
+  categoryId    String
+  category      Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  orderItems    OrderItem[]
+  reviews       Review[]
+
+  metaTitle     String?
+  metaDesc      String?
+
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([categoryId])
+  @@index([featured])
+  @@index([isActive])
+  @@map("products")
+}
+
+// ============================================
+// ORDERS (Cash on Delivery)
+// ============================================
+model Order {
+  id              String      @id @default(cuid())
+  orderNumber     String      @unique // e.g. ORD-2024-0001
+
+  // Customer info (no account required for COD)
+  customerName    String
+  customerPhone   String
+  customerEmail   String?
+  shippingAddress String      @db.Text
+  city            String
+  region          String?
+  postalCode      String?
+  notes           String?     @db.Text
+
+  // Order details
+  subtotal        Float
+  discount        Float       @default(0)
+  shippingFee     Float       @default(0)
+  total           Float
+
+  status          OrderStatus @default(PENDING)
+  paymentMethod   String      @default("COD")
+  promoCode       String?
+
+  items           OrderItem[]
+
+  // Tracking
+  trackingNotes   String?     @db.Text
+  confirmedAt     DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status])
+  @@index([customerPhone])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String  @id @default(cuid())
+  orderId    String
+  order      Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productName String // Snapshot at time of order
+  productImage String?
+  price      Float   // Snapshot
+  quantity   Int
+  subtotal   Float
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPING
+  DELIVERED
+  CANCELLED
+}
+
+// ============================================
+// OFFERS / PROMO CODES
+// ============================================
+model Offer {
+  id           String     @id @default(cuid())
+  code         String     @unique
+  title        String
+  description  String?
+  discountType DiscountType @default(PERCENTAGE)
+  discountValue Float
+  minOrderAmount Float?
+  maxDiscount  Float?
+  usageLimit   Int?
+  usedCount    Int        @default(0)
+  isActive     Boolean    @default(true)
+  startsAt     DateTime?
+  expiresAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("offers")
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+// ============================================
+// HOMEPAGE BANNERS
+// ============================================
+model Banner {
+  id        String   @id @default(cuid())
+  title     String
+  subtitle  String?
+  image     String
+  mobileImage String?
+  link      String?
+  buttonText String?
+  position  BannerPosition @default(HERO)
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("banners")
+}
+
+enum BannerPosition {
+  HERO
+  MIDDLE
+  FOOTER
+}
+
+// ============================================
+// PRODUCT REVIEWS
+// ============================================
+model Review {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerName String
+  rating     Int      // 1-5
+  comment    String?  @db.Text
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([productId])
+  @@map("reviews")
+}
+
+// ============================================
+// SITE SETTINGS (key-value)
+// ============================================
+model Setting {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String @db.Text
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
